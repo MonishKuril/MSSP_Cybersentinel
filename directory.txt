@@ -1,0 +1,31 @@
+MSSP/MSP console/
+├── backend/
+│   ├── config/
+│   │   └── admins.js
+│   │   └── clients.js
+|   ├── middleware/
+│   │   └── auth.js
+│   ├── node_modules/
+│   ├── routes/
+│   │   ├── admin.js
+│   │   └── auth.js
+│   │   └── clients.js
+│   │   └── news.js
+│   ├── app.js
+│   └── .env
+│   └── app.js
+│   └── package-lock.json
+│   └── package.json
+└── frontend/
+    ├── public/
+    │   ├── index.html
+    │   ├── login.html
+    │   ├── client-icon.png
+    │   ├── desktop-bg.jpg    
+    │   └── dashboard.html
+    ├── scripts
+    │   ├── auth.js
+    │   └── dashboard.js
+    │   └── main.js
+    └── styles/
+        └── main.css

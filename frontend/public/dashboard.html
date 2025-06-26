@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIEM Console - Dashboard</title>
+  <link rel="stylesheet" href="/styles/main.css">
+  <link rel="icon" href="/cybersentinel_fevicon.png" type="image/x-icon">
+</head>
+<body class="dashboard-bg">
+  <div class="dashboard-container">
+    <header class="taskbar">
+      <div class="taskbar-left">
+        <img src="/cybersentinel_fevicon.png" alt="CyberSentinel Logo" class="logo" />
+        <h1>MSSP Client Console</h1>
+      </div>
+      <div class="taskbar-right">
+        <button id="refreshBtn" class="taskbar-btn" title="Refresh">
+          <span>⟳</span> Refresh
+        </button>
+        <button id="manageClientsBtn" class="taskbar-btn" title="Manage Clients">
+          <span>⚙</span> Manage Clients
+        </button>
+        <button id="logoutButton" class="taskbar-btn" title="Logout">
+          <span>⎋</span> Logout
+        </button>
+      </div>
+    </header>
+
+    <div class="dashboard-header">
+      <div class="welcome-section">
+        <h2 id="welcomeMessage">Welcome!</h2>
+      </div>
+      
+      <div class="header-controls">
+        <div class="leaderboard-search">
+          <input type="text" id="clientSearch" placeholder="Search clients...">
+          <button id="searchClientBtn">🔍</button>
+        </div>
+        
+        <button class="leaderboard-toggle" id="leaderboardToggleBtn">
+          <span class="icon">📊</span> Top Servers
+          <span class="arrow">▼</span>
+        </button>
+        
+        <div class="leaderboard-dropdown hidden" id="leaderboardDropdown">
+          <div class="leaderboard-list" id="leaderboardList"></div>
+        </div>
+      </div>
+      
+      <div id="clientSearchPopup" class="search-popup hidden">
+        <div class="popup-content">
+          <span class="close-popup">&times;</span>
+          <div id="searchResults"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="message" class="message hidden"></div>
+
+    <div id="mainContent">
+      <div id="dashboardView" class="dashboard-grid">
+        <!-- Client cards will be loaded here dynamically -->
+      </div>
+
+      <div id="managementView" class="management-panel hidden">
+        <div class="panel-header">
+          <h2 id="managementTitle">Client Management</h2>
+          <button id="addClientBtn" class="action-btn">+ Add New Client</button>
+        </div>
+        <div class="clients-table-container">
+          <table class="clients-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>URL</th>
+                <th>Description</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="clientsTableBody">
+              <!-- Clients will be loaded here dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+           <div id="superAdminView" class="management-panel hidden">
+  <div class="panel-header">
+    <h2>Admin Management</h2>
+    <button id="addAdminBtn" class="action-btn">+ Add New Admin</button>
+  </div>
+  <div class="admins-table-container">
+    <table class="admins-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email ID</th>
+          <th>Organization Name</th>
+          <th>City</th>
+          <th>State</th>
+          <th>Deployed Clients</th>
+          <th>Active Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="adminsTableBody">
+        <!-- Admins and their details will be loaded here dynamically -->
+      </tbody>
+    </table>
+  </div>
+</div></div>
+
+        <div id="addAdminModal" class="admin-modal hidden">
+          <div class="admin-modal-content">
+            <span class="admin-close-modal">&times;</span>
+            <h2 class="admin-modal-title">Add New Admin</h2>
+            <form id="addAdminForm" class="admin-modal-form">
+              <div class="admin-form-group">
+                <label for="adminUsername">Admin Username:</label>
+                <input type="text" id="adminUsername" required>
+              </div>
+              <div class="admin-form-group">
+                <label for="adminPassword">Admin Password:</label>
+                <input type="password" id="adminPassword" required>
+              </div>
+              <div class="admin-form-group">
+                <label for="adminName">Name:</label>
+                <input type="text" id="adminName" required>
+              </div>
+              <div class="admin-form-group">
+                <label for="adminEmail">Email ID:</label>
+                <input type="email" id="adminEmail" required>
+              </div>
+              <div class="admin-form-group">
+                <label for="adminOrganization">Organization Name:</label>
+                <input type="text" id="adminOrganization" required>
+              </div>
+              <div class="admin-form-group">
+                <label for="adminCity">City:</label>
+                <input type="text" id="adminCity" required>
+              </div>
+              <div class="admin-form-group">
+                <label for="adminState">State:</label>
+                <input type="text" id="adminState" required>
+              </div>
+              <button type="submit" class="admin-submit-btn">Add Admin</button>
+            </form>
+          </div>
+        </div>
+          <!-- Add this modal near your other modals -->
+            <div id="superAdminAddClientModal" class="modal hidden">
+              <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>Add New Client</h2>
+                <form id="superAdminAddClientForm">
+                  <input type="hidden" id="superAdminClientAdminId">
+                  <div class="form-group">
+                    <label for="superAdminClientName">Client Name</label>
+                    <input type="text" id="superAdminClientName" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="superAdminClientUrl">Dashboard URL</label>
+                    <input type="url" id="superAdminClientUrl" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="superAdminClientDescription">Description</label>
+                    <textarea id="superAdminClientDescription"></textarea>
+                  </div>
+                  
+                  <!-- Graylog Configuration -->
+                  <div class="form-section">
+                    <h3>Graylog Configuration (Optional)</h3>
+                    <div class="form-group">
+                      <label for="superAdminGraylogHost">Graylog Host</label>
+                      <input type="text" id="superAdminGraylogHost">
+                    </div>
+                    <div class="form-group">
+                      <label for="superAdminGraylogUsername">Username</label>
+                      <input type="text" id="superAdminGraylogUsername">
+                    </div>
+                    <div class="form-group">
+                      <label for="superAdminGraylogPassword">Password</label>
+                      <input type="password" id="superAdminGraylogPassword">
+                    </div>
+                    <div class="form-group">
+                      <label for="superAdminGraylogStreamId">Stream ID</label>
+                      <input type="text" id="superAdminGraylogStreamId">
+                    </div>
+                  </div>
+                  
+                  <!-- Log API Configuration -->
+                  <div class="form-section">
+                    <h3>Log API Configuration (Optional)</h3>
+                    <div class="form-group">
+                      <label for="superAdminLogApiHost">API Host</label>
+                      <input type="text" id="superAdminLogApiHost">
+                    </div>
+                    <div class="form-group">
+                      <label for="superAdminLogApiUsername">Username</label>
+                      <input type="text" id="superAdminLogApiUsername">
+                    </div>
+                    <div class="form-group">
+                      <label for="superAdminLogApiPassword">Password</label>
+                      <input type="password" id="superAdminLogApiPassword">
+                    </div>
+                  </div>
+                  
+                  <button type="submit" class="btn-primary">Add Client</button>
+                </form>
+              </div>
+            </div>
+        
+        <div id="editAdminModal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Edit Admin</h2>
+      <button type="button" class="admin-close-modal" style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 0; margin-left: auto;">
+        ×
+      </button>
+    </div>
+
+    <form id="editAdminForm" class="admin-form">
+      <input type="hidden" id="editAdminId">
+      
+      <div class="form-group">
+        <label for="editAdminName">Name:</label>
+        <input type="text" id="editAdminName" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="editAdminEmail">Email:</label>
+        <input type="email" id="editAdminEmail" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="editAdminOrganization">Organization:</label>
+        <input type="text" id="editAdminOrganization" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="editAdminCity">City:</label>
+        <input type="text" id="editAdminCity" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="editAdminState">State:</label>
+        <input type="text" id="editAdminState" required>
+      </div>
+      
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Update Admin</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+      <div id="clientActionsModal" class="modal hidden">
+        <div class="modal-content">
+          <span class="close-modal">&times;</span>
+          <h2 id="clientModalTitle">Client Actions</h2>
+          <div class="modal-actions">
+            <button id="viewClientBtn" class="action-btn">View Dashboard</button>
+            <button id="editClientBtn" class="action-btn">Edit Client</button>
+            <button id="deleteClientBtn" class="action-btn danger">Delete Client</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="editClientModal" class="modal hidden">
+        <div class="modal-content">
+          <span class="close-modal">&times;</span>
+          <h2>Edit Client</h2>
+          <form id="editClientForm">
+            <input type="hidden" id="editClientId">
+            <div class="form-group">
+              <label for="editClientName">Client Name:</label>
+              <input type="text" id="editClientName" required>
+            </div>
+            <div class="form-group">
+              <label for="editClientUrl">Dashboard URL:</label>
+              <input type="url" id="editClientUrl" required>
+            </div>
+            <div class="form-group">
+              <label for="editClientDescription">Description:</label>
+              <input type="text" id="editClientDescription">
+            </div>
+            <div class="form-group">
+              <label>Graylog Configuration</label>
+              <input type="text" id="editGraylogHost" placeholder="Host:Port">
+              <input type="text" id="editGraylogUsername" placeholder="Username">
+              <input type="password" id="editGraylogPassword" placeholder="Password">
+              <input type="text" id="editGraylogStreamId" placeholder="Stream ID">
+            </div>
+            <div class="form-group">
+              <label>Log API Configuration</label>
+              <input type="text" id="editLogApiHost" placeholder="Host:Port">
+              <input type="text" id="editLogApiUsername" placeholder="Username">
+              <input type="password" id="editLogApiPassword" placeholder="Password">
+            </div>
+            <button type="submit" class="submit-btn">Update Client</button>
+          </form>
+        </div>
+      </div>
+
+      <div id="addClientModal" class="modal hidden">
+        <div class="modal-content">
+          <span class="close-modal">&times;</span>
+          <h2>Add New Client</h2>
+          <form id="addClientForm">
+            <div class="form-group">
+              <label for="clientName">Client Name:</label>
+              <input type="text" id="clientName" required>
+            </div>
+            <div class="form-group">
+              <label for="clientUrl">Dashboard URL:</label>
+              <input type="url" id="clientUrl" required>
+            </div>
+            <div class="form-group">
+              <label for="clientDescription">Description:</label>
+              <input type="text" id="clientDescription">
+            </div>
+            <div class="form-group">
+              <label>Graylog Configuration</label>
+              <input type="text" id="graylogHost" placeholder="Host:Port">
+              <input type="text" id="graylogUsername" placeholder="Username">
+              <input type="password" id="graylogPassword" placeholder="Password">
+              <input type="text" id="graylogStreamId" placeholder="Stream ID">
+            </div>
+            <div class="form-group">
+              <label>Log API Configuration</label>
+              <input type="text" id="logApiHost" placeholder="Host:Port">
+              <input type="text" id="logApiUsername" placeholder="Username">
+              <input type="password" id="logApiPassword" placeholder="Password">
+            </div>
+            <button type="submit" class="submit-btn">Add Client</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  
+    <footer class="dashboard-footer">
+      <div class="news-ticker-container">
+        <div id="newsTicker" class="news-ticker">
+          <div class="ticker-content"></div>
+        </div>
+        <div class="ticker-controls">
+          <button id="pauseTickerBtn" title="Pause">⏸</button>
+          <button id="refreshNewsBtn" title="Refresh">⟳</button>
+        </div>
+      </div>
+      <div class="footer-info">
+        <span>SIEM Console v1.0</span>
+        <b><span id="currentTime"></span></b>
+        <span id="newsSource"></span>
+      </div>
+    </footer>
+  </div>
+  <script src="/scripts/auth.js"></script>
+  <script src="/scripts/dashboard.js"></script>
+</body>
+</html>

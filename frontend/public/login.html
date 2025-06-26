@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SIEM Console - Login</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <link rel="icon" href="/cybersentinel_logo.jpg" type="image/x-icon">
+</head>
+<body>
+  <div class="background"></div>
+  <div class="login-container">
+    <div class="login-card">
+      <img src="/cybersentinel_logo.jpg" alt="cybersentinel Logo" class="logo" />
+      <h1>MSSP Console</h1>
+      <div class="login-header">
+        <h4>Happy to see you 😙</h4>
+        <h5>Please, Login to your account</h5>
+        <form id="loginForm">
+          <div class="form-group">
+            <span class="icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#999">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm6-7h-1V7a5 5 0
+                     00-10 0v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0
+                     002-2v-8a2 2 0 00-2-2zm-3 0H9V7a3 3 0
+                     016 0v3z"/>
+              </svg>
+            </span>
+            <input type="text" id="username" required placeholder="Username" />
+          </div>
+          <div class="form-group">
+            <span class="icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#999">
+                <path d="M12 17a2 2 0 100-4 2 2 0 000 4zm6-7h-1V7a5 5 0
+                     00-10 0v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0
+                     002-2v-8a2 2 0 00-2-2zm-3 0H9V7a3 3 0
+                     016 0v3z"/>
+              </svg>
+            </span>
+            <input type="password" id="password" required placeholder="Password" />
+          </div>
+          <div class="form-group">
+            <select id="role" required>
+              <option value="">Select Role</option>
+              <option value="admin">Admin</option>
+              <option value="superadmin">Super Admin</option>
+            </select>
+          </div>
+          <div class="form-group hidden" id="totpGroup">
+            <span class="icon">🔐</span>
+            <input type="text" id="totpCode" placeholder="Enter 6-digit code" maxlength="6" />
+          </div>
+          <button type="submit" class="login-btn">Login</button>
+          <div>
+            <img src="/VG_logo.png" alt="Virtual galaxy Logo" class="vgipl_logo" />
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MFA Setup Modal -->
+  <div id="mfaSetupModal" class="mfa-modal hidden">
+    <div class="mfa-modal-content">
+      <h2>Setup Multi-Factor Authentication</h2>
+      <div class="mfa-setup-steps">
+        <div class="step">
+          <h3>Step 1: Scan QR Code</h3>
+          <p>Scan this QR code with Google Authenticator or any TOTP app:</p>
+          <div id="qrCodeContainer" class="qr-container"></div>
+        </div>
+        <div class="step">
+          <h3>Step 2: Save Backup Codes</h3>
+          <p>Save these backup codes in a safe place:</p>
+          <div id="backupCodesContainer" class="backup-codes"></div>
+          <button id="downloadBackupCodes" class="backup-btn">Download Backup Codes</button>
+        </div>
+        <div class="step">
+          <h3>Step 3: Verify Setup</h3>
+          <p>Enter the 6-digit code from your authenticator app:</p>
+          <input type="text" id="verifyMfaCode" placeholder="000000" maxlength="6" />
+          <button id="verifyMfaBtn" class="verify-btn">Verify & Complete Setup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/scripts/auth.js"></script>
+</body>
+</html>
