@@ -15,7 +15,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Update welcome message based on role
   const welcomeMessage = document.getElementById('welcomeMessage');
-  if (role === 'superadmin') {
+  if (role === 'main-superadmin') {
+    welcomeMessage.textContent = 'Welcome Back, Main Super Admin!';
+  } else if (role === 'superadmin') {
     welcomeMessage.textContent = 'Welcome Back, Super Admin!';
   } else {
     welcomeMessage.textContent = `Welcome Back, ${userId}!`;
@@ -36,6 +38,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   // News ticker
   initializeNewsTicker();
   setupTickerControls();
+
+  const superAdminCloseBtn = document.querySelector("#addSuperAdminModal .admin-close-modal");
+  const superAdminModal = document.getElementById("addSuperAdminModal");
+  if (superAdminCloseBtn && superAdminModal) {
+    superAdminCloseBtn.addEventListener("click", function () {
+      superAdminModal.classList.add("hidden");
+    });
+  }
+
+
+  const addSuperAdminForm = document.getElementById("addSuperAdminForm");
+  if (addSuperAdminForm) {
+    addSuperAdminForm.addEventListener("submit", addSuperAdminSubmitHandler);
+  }
 
   // FIXED: Setup form handlers after DOM is loaded
   const addAdminForm = document.getElementById("addAdminForm");
@@ -69,21 +85,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   const toggleBtn = document.getElementById('leaderboardToggleBtn');
   const dropdown = document.getElementById('leaderboardDropdown');
   const arrow = toggleBtn.querySelector('.arrow');
-  
+
   if (toggleBtn && dropdown) {
-    toggleBtn.addEventListener('click', function(e) {
+    toggleBtn.addEventListener('click', function (e) {
       e.stopPropagation();
       dropdown.classList.toggle('visible');
       dropdown.classList.toggle('hidden');
-      
+
       arrow.textContent = dropdown.classList.contains('visible') ? '▲' : '▼';
-      
+
       if (dropdown.classList.contains('visible')) {
         updateLeaderboard();
       }
     });
-    
-    document.addEventListener('click', function() {
+
+    document.addEventListener('click', function () {
       if (dropdown.classList.contains('visible')) {
         dropdown.classList.remove('visible');
         dropdown.classList.add('hidden');
@@ -91,11 +107,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    dropdown.addEventListener('click', function(e) {
+    dropdown.addEventListener('click', function (e) {
       e.stopPropagation();
     });
   }
 });
+
+function showAddSuperAdminModal() {
+  const modal = document.getElementById("addSuperAdminModal");
+  const form = document.getElementById("addSuperAdminForm");
+  if (form) {
+    form.reset();
+  }
+  modal.classList.remove("hidden");
+}
 
 function initializeUI() {
   // Navigation and action buttons
@@ -115,14 +140,16 @@ function initializeUI() {
     .getElementById("addAdminBtn")
     .addEventListener("click", showAddAdminModal);
 
+  document.getElementById("addSuperAdminBtn")?.addEventListener("click", showAddSuperAdminModal);
+
   // Add search functionality
   document.getElementById("searchClientBtn").addEventListener("click", searchClient);
   document.getElementById("clientSearch").addEventListener("keyup", function (e) {
-      if (e.key === "Enter") searchClient();
-    });
+    if (e.key === "Enter") searchClient();
+  });
 
   // FIXED: Use event delegation for dynamically created buttons
-  document.addEventListener('click', function(e) {
+  document.addEventListener('click', function (e) {
     // Handle "New Client" buttons for admins
     if (e.target.classList.contains('add-client-btn')) {
       e.preventDefault();
@@ -132,7 +159,7 @@ function initializeUI() {
       console.log('Add client button clicked for admin:', adminId, adminUsername);
       showSuperAdminAddClientModal(adminId, adminUsername);
     }
-    
+
     // Handle Open Dashboard buttons in search results
     if (e.target.closest(".view-client-btn")) {
       const clientCard = e.target.closest(".client-card");
@@ -143,17 +170,17 @@ function initializeUI() {
     }
   });
 
-  document.querySelector(".close-popup").addEventListener("click", closeSearchPopup); 
+  document.querySelector(".close-popup").addEventListener("click", closeSearchPopup);
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-    const closeBtn = document.querySelector(".admin-close-modal");
-    const modal = document.getElementById("addAdminModal");
+  const closeBtn = document.querySelector(".admin-close-modal");
+  const modal = document.getElementById("addAdminModal");
 
-    closeBtn.addEventListener("click", function () {
-      modal.classList.add("hidden");
-    });
+  closeBtn.addEventListener("click", function () {
+    modal.classList.add("hidden");
   });
+});
 function setupModalCloseHandlers() {
   document.querySelectorAll(".modal").forEach((modal) => {
     modal.addEventListener("click", (e) => {
@@ -205,15 +232,15 @@ async function loadClients() {
                     </div>
                     <div>
                         <div class="client-name">${escapeHtml(
-                          client.name
-                        )}</div>
+        client.name
+      )}</div>
                         <div class="client-url">${escapeHtml(client.url)}</div>
                     </div>
                 </div>
                 <div class="client-description">
                     ${escapeHtml(
-                      client.description || "No description available"
-                    )}
+        client.description || "No description available"
+      )}
                 </div>
                     
                 <div class="client-status">
@@ -349,7 +376,7 @@ async function fetchLogCount(clientId) {
         // Calculate average
         const avg = Math.round(
           clientHistory[clientId].reduce((a, b) => a + b, 0) /
-            clientHistory[clientId].length
+          clientHistory[clientId].length
         );
         clientCard.querySelector(
           ".history-average"
@@ -475,26 +502,26 @@ async function loadAdminsAndClients() {
     console.log("All Clients:", allClients);
 
     tableBody.innerHTML = "";
-    
+
     admins.forEach(admin => {
       // Try multiple matching strategies to find clients for this admin
       let adminClients = [];
-      
+
       // Strategy 1: Match by admin.username
       adminClients = allClients.filter(client => client.adminId === admin.username);
-      
+
       // Strategy 2: If no clients found, try matching by admin.id
       if (adminClients.length === 0) {
         adminClients = allClients.filter(client => client.adminId === admin.id);
       }
-      
+
       // Strategy 3: If still no clients, try matching by admin.name
       if (adminClients.length === 0) {
         adminClients = allClients.filter(client => client.adminId === admin.name);
       }
-      
+
       console.log(`Admin ${admin.username || admin.name} has ${adminClients.length} clients:`, adminClients);
-      
+
       const row = document.createElement("tr");
       row.innerHTML = `
         <td>${admin.id}</td>
@@ -505,8 +532,8 @@ async function loadAdminsAndClients() {
         <td>${admin.state}</td>
         <td>
           <select class="admin-clients-dropdown" data-admin-id="${admin.id}" data-admin-username="${admin.username || admin.name}">
-            ${adminClients.length > 0 ? 
-              adminClients.map(client => `
+            ${adminClients.length > 0 ?
+          adminClients.map(client => `
                 <option value="${client.id}" data-url="${client.url}" data-client-name="${client.name}">
                   ${client.name}
                 </option>
@@ -529,8 +556,8 @@ async function loadAdminsAndClients() {
       tableBody.appendChild(row);
     });
 
-     document.querySelectorAll('.admin-clients-dropdown').forEach(dropdown => {
-      dropdown.addEventListener('change', function() {
+    document.querySelectorAll('.admin-clients-dropdown').forEach(dropdown => {
+      dropdown.addEventListener('change', function () {
         const selectedOption = this.options[this.selectedIndex];
         if (selectedOption.value && selectedOption.dataset.url) {
           console.log('Opening client:', selectedOption.dataset.clientName, selectedOption.dataset.url);
@@ -542,7 +569,7 @@ async function loadAdminsAndClients() {
     });
 
     document.querySelectorAll('.block-admin-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
+      btn.addEventListener('click', function () {
         const adminId = this.dataset.adminId;
         const isBlocked = this.dataset.blocked === 'true';
         toggleAdminBlock(adminId, isBlocked);
@@ -550,7 +577,7 @@ async function loadAdminsAndClients() {
     });
 
     document.querySelectorAll('.view-admin-client-btn').forEach(btn => {
-      btn.addEventListener('click', async function() {
+      btn.addEventListener('click', async function () {
         const adminId = this.dataset.adminId;
         const clientId = this.parentElement.previousElementSibling.querySelector('select').value;
         await viewAdminClient(adminId, clientId);
@@ -558,7 +585,7 @@ async function loadAdminsAndClients() {
     });
 
     document.querySelectorAll('.edit-admin-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
+      btn.addEventListener('click', function () {
         const adminId = this.dataset.adminId;
         showEditAdminModal(adminId);
       });
@@ -591,10 +618,10 @@ async function toggleAdminBlock(adminId, isBlocked) {
       // Update UI without reloading
       const btn = document.querySelector(`.block-admin-btn[data-admin-id="${adminId}"]`);
       const statusCell = btn.closest('tr').querySelector('.admin-status');
-      
+
       btn.dataset.blocked = !isBlocked;
       btn.textContent = isBlocked ? 'Block' : 'Unblock';
-      
+
       statusCell.textContent = isBlocked ? 'Active' : 'Blocked';
       statusCell.className = `admin-status ${isBlocked ? 'active' : 'blocked'}`;
     } else {
@@ -609,23 +636,23 @@ async function toggleAdminBlock(adminId, isBlocked) {
 function showAddClientModal() {
   const modal = document.getElementById("addClientModal");
   const form = document.getElementById("addClientForm");
-  
+
   // Reset form and clear any adminId field if it exists
   form.reset();
   const adminIdField = document.getElementById("clientAdminId");
   if (adminIdField) adminIdField.value = "";
-  
+
   modal.classList.remove("hidden");
 }
 function showEditClientModal(client) {
   const modal = document.getElementById("editClientModal");
-  
+
   // Populate basic client info
   document.getElementById("editClientId").value = client.id;
   document.getElementById("editClientName").value = client.name || '';
   document.getElementById("editClientUrl").value = client.url || '';
   document.getElementById("editClientDescription").value = client.description || '';
-  
+
   // Populate Graylog config if it exists
   if (client.graylog) {
     document.getElementById("editGraylogHost").value = client.graylog.host || '';
@@ -633,14 +660,14 @@ function showEditClientModal(client) {
     document.getElementById("editGraylogPassword").value = client.graylog.password || '';
     document.getElementById("editGraylogStreamId").value = client.graylog.streamId || '';
   }
-  
+
   // Populate Log API config if it exists
   if (client.logApi) {
     document.getElementById("editLogApiHost").value = client.logApi.host || '';
     document.getElementById("editLogApiUsername").value = client.logApi.username || '';
     document.getElementById("editLogApiPassword").value = client.logApi.password || '';
   }
-  
+
   // Show the modal
   modal.classList.remove("hidden");
 }
@@ -803,8 +830,8 @@ async function loadClientsTable() {
 
     clientsTableBody.innerHTML = "";
     clients.forEach(client => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
+      const row = document.createElement("tr");
+      row.innerHTML = `
       <td>${client.name}</td>
       <td>${client.url}</td>
       <td>${client.description || 'No description'}</td>
@@ -814,39 +841,39 @@ async function loadClientsTable() {
         <button class="table-btn delete-client-btn" data-client-id="${client.id}">Delete</button>
       </td>
     `;
-    clientsTableBody.appendChild(row);
-  });
+      clientsTableBody.appendChild(row);
+    });
 
     // Add event listeners for client actions
     document.querySelectorAll('.view-client-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
+      btn.addEventListener('click', function () {
         const clientId = this.dataset.clientId;
         openClientDashboard(clientId);
       });
     });
 
     document.querySelectorAll('.edit-client-btn').forEach(btn => {
-    btn.addEventListener('click', async function() {
-      const clientId = this.dataset.clientId;
-      try {
-        const response = await fetch(`/api/clients/${clientId}`, {
-          credentials: "include"
-        });
-        if (response.ok) {
-          const client = await response.json();
-          showEditClientModal(client);
-        } else {
-          throw new Error('Failed to fetch client details');
+      btn.addEventListener('click', async function () {
+        const clientId = this.dataset.clientId;
+        try {
+          const response = await fetch(`/api/clients/${clientId}`, {
+            credentials: "include"
+          });
+          if (response.ok) {
+            const client = await response.json();
+            showEditClientModal(client);
+          } else {
+            throw new Error('Failed to fetch client details');
+          }
+        } catch (error) {
+          console.error('Error fetching client details:', error);
+          showMessage('Error loading client details', 'error');
         }
-      } catch (error) {
-        console.error('Error fetching client details:', error);
-        showMessage('Error loading client details', 'error');
-      }
+      });
     });
-  });
 
     document.querySelectorAll('.delete-client-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
+      btn.addEventListener('click', function () {
         const clientId = this.dataset.clientId;
         deleteClient(clientId);
       });
@@ -890,9 +917,8 @@ function updateLeaderboard() {
     item.className = "leaderboard-item";
     item.innerHTML = `
             <div class="leaderboard-rank">${index + 1}</div>
-            <div class="leaderboard-name" title="${client.name}">${
-      client.name
-    }</div>
+            <div class="leaderboard-name" title="${client.name}">${client.name
+      }</div>
             <div class="leaderboard-count">${client.avg}</div>
         `;
     leaderboardList.appendChild(item);
@@ -900,7 +926,7 @@ function updateLeaderboard() {
 }
 
 ///////////////////
- 
+
 // Search function
 async function searchClient() {
   const searchTerm = document.getElementById("clientSearch").value.trim();
@@ -919,8 +945,8 @@ async function searchClient() {
       // Create a copy of the desktop icon with data-url attribute
       resultsContainer.innerHTML = `
         <div class="client-card" data-url="${escapeHtml(
-          foundClient.url
-        )}" style="margin: 0; width: 100%">
+        foundClient.url
+      )}" style="margin: 0; width: 100%">
           <div class="client-card-header">
             <div class="client-icon" style="background: ${getRandomColor()}">
               ${foundClient.name.charAt(0).toUpperCase()}
@@ -1012,17 +1038,17 @@ async function initializeNewsTicker() {
   try {
     await updateNewsTicker();
     startTickerAnimation();
-    
+
     // Update news every 5 minutes
     setInterval(async () => {
       if (!newsTickerPaused) {
         await updateNewsTicker();
       }
     }, 5 * 60 * 1000);
-    
+
     updateCurrentTime();
     setInterval(updateCurrentTime, 1000);
-    
+
   } catch (error) {
     console.error('Failed to initialize news ticker:', error);
     showFallbackNews();
@@ -1035,22 +1061,22 @@ async function updateNewsTicker() {
     const response = await fetch('/api/news/scrape', {
       credentials: 'include'
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
     console.log('News data received:', data);
-    
+
     const tickerContent = document.querySelector('.ticker-content');
     if (!tickerContent) {
       throw new Error('Ticker content element not found');
     }
-    
+
     // Clear existing content
     tickerContent.innerHTML = '';
-    
+
     // Add news items
     data.news.forEach(item => {
       const newsElement = document.createElement('a');
@@ -1059,20 +1085,20 @@ async function updateNewsTicker() {
       newsElement.target = '_blank';
       newsElement.textContent = item.title;
       tickerContent.appendChild(newsElement);
-      
+
       const separator = document.createElement('span');
       separator.className = 'ticker-separator';
       separator.textContent = ' ••• ';
       tickerContent.appendChild(separator);
     });
-    
+
     // Clone for seamless looping
     tickerContent.innerHTML += tickerContent.innerHTML;
-    
+
     // Update footer info
     document.getElementById('newsSource').textContent = `Source: ${data.source || 'Local'}`;
     lastNewsUpdate = new Date();
-    
+
   } catch (error) {
     console.error('Error updating news ticker:', error);
     showFallbackNews();
@@ -1129,7 +1155,7 @@ function setupTickerControls() {
       document.getElementById('pauseTickerBtn').title = 'Pause';
     }
   });
-  
+
   document.getElementById('refreshNewsBtn')?.addEventListener('click', async () => {
     try {
       document.getElementById('refreshNewsBtn').textContent = '⌛';
@@ -1145,7 +1171,7 @@ async function toggleManagementView() {
   const desktopView = document.getElementById("dashboardView");
   const managementView = document.getElementById("managementView");
   const superAdminView = document.getElementById("superAdminView");
-  
+
   if (desktopView.classList.contains("hidden")) {
     // Switch to desktop view
     managementView.classList.add("hidden");
@@ -1155,12 +1181,23 @@ async function toggleManagementView() {
       "<span>⚙</span> Manage Clients";
   } else {
     const authData = await window.__auth.checkAuth();
-    if (authData.role === 'superadmin') {
+    if (authData.role === 'superadmin' || authData.role === 'main-superadmin') {
       desktopView.classList.add("hidden");
       managementView.classList.add("hidden");
       superAdminView.classList.remove("hidden");
       document.getElementById("manageClientsBtn").innerHTML =
         "<span>⌂</span> Desktop View";
+
+      // Show/hide superadmin button based on role
+      const addSuperAdminBtn = document.getElementById("addSuperAdminBtn");
+      if (addSuperAdminBtn) {
+        if (authData.role === 'main-superadmin') {
+          addSuperAdminBtn.style.display = 'inline-block';
+        } else {
+          addSuperAdminBtn.style.display = 'none';
+        }
+      }
+
       loadAdminsAndClients();
     } else {
       desktopView.classList.add("hidden");
@@ -1237,7 +1274,7 @@ async function showEditAdminModal(adminId) {
     }
 
     const admin = data.admin;
-    
+
     // Populate the form fields
     document.getElementById("editAdminId").value = admin.id;
     document.getElementById("editAdminName").value = admin.name || '';
@@ -1248,7 +1285,7 @@ async function showEditAdminModal(adminId) {
 
     // Show the modal
     document.getElementById("editAdminModal").classList.remove("hidden");
-    
+
   } catch (error) {
     console.error('Error loading admin details:', error);
     showMessage('Error loading admin details', 'error');
@@ -1258,7 +1295,7 @@ async function showEditAdminModal(adminId) {
 // Function to handle edit admin form submission
 async function editAdminSubmitHandler(e) {
   e.preventDefault();
-  
+
   const adminId = document.getElementById("editAdminId").value;
   const name = document.getElementById("editAdminName").value.trim();
   const email = document.getElementById("editAdminEmail").value.trim();
@@ -1304,20 +1341,20 @@ async function editAdminSubmitHandler(e) {
 
 function showSuperAdminAddClientModal(adminId, adminUsername) {
   console.log('showSuperAdminAddClientModal called with:', adminId, adminUsername);
-  
+
   const modal = document.getElementById('superAdminAddClientModal');
   const form = document.getElementById('superAdminAddClientForm');
-  
+
   if (!modal) {
     console.error('superAdminAddClientModal not found');
     return;
   }
-  
+
   if (!form) {
     console.error('superAdminAddClientForm not found');
     return;
   }
-  
+
   // Set the admin ID in the hidden field
   const adminIdField = document.getElementById('superAdminClientAdminId');
   if (adminIdField) {
@@ -1326,22 +1363,59 @@ function showSuperAdminAddClientModal(adminId, adminUsername) {
   } else {
     console.error('superAdminClientAdminId field not found');
   }
-  
+
   // Reset form
   form.reset();
-  
+
   // Set the admin ID again after reset (in case reset cleared it)
   if (adminIdField) {
     adminIdField.value = adminId || adminUsername;
   }
-  
+
   // Show modal
   modal.classList.remove('hidden');
   console.log('Modal should now be visible');
 }
+async function addSuperAdminSubmitHandler(e) {
+  e.preventDefault();
+  const username = document.getElementById("superAdminUsername").value.trim();
+  const password = document.getElementById("superAdminPassword").value.trim();
+  const name = document.getElementById("superAdminName").value.trim();
+  const email = document.getElementById("superAdminEmail").value.trim();
+  const organization = document.getElementById("superAdminOrganization").value.trim();
+  const city = document.getElementById("superAdminCity").value.trim();
+  const state = document.getElementById("superAdminState").value.trim();
+
+  if (!username || !password || !name || !email || !organization || !city || !state) {
+    showMessage("All fields are required", "error");
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/admin/superadmins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username, password, name, email, organization, city, state }),
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      showMessage("Superadmin added successfully", "success");
+      document.getElementById("addSuperAdminModal").classList.add("hidden");
+      loadAdminsAndClients();
+    } else {
+      showMessage(data.message || "Failed to add superadmin", "error");
+    }
+  } catch (error) {
+    console.error("Error adding superadmin:", error);
+    showMessage("Error adding superadmin", "error");
+  }
+}
+
 async function superAdminAddClientSubmitHandler(e) {
   e.preventDefault();
-  
+
   const adminId = document.getElementById('superAdminClientAdminId').value;
   const name = document.getElementById('superAdminClientName').value.trim();
   const url = document.getElementById('superAdminClientUrl').value.trim();
@@ -1381,13 +1455,13 @@ async function superAdminAddClientSubmitHandler(e) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ 
-        name, 
-        url, 
-        description, 
-        graylog, 
+      body: JSON.stringify({
+        name,
+        url,
+        description,
+        graylog,
         logApi,
-        adminId 
+        adminId
       }),
     });
 

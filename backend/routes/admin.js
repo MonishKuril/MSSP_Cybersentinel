@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { authMiddleware, adminAuthMiddleware, superAdminAuthMiddleware,adminOrSuperAdminAuthMiddleware} = require('../middleware/auth');
+const { authMiddleware, adminAuthMiddleware, superAdminAuthMiddleware, mainSuperAdminAuthMiddleware, adminOrSuperAdminAuthMiddleware } = require('../middleware/auth');
 const clientsFilePath = path.join(__dirname, '../config/clients.js');
 
 const getClients = () => {
@@ -44,16 +44,16 @@ const writeAdminsToFile = (admins) => {
 router.post('/clients', [authMiddleware, adminOrSuperAdminAuthMiddleware], (req, res) => {
   try {
     const { name, url, description, graylog, logApi, adminId } = req.body;
-   
+
     // For superadmin, use the provided adminId
     // For regular admin, use their own username
     const assignedAdminId = req.user.role === 'superadmin' && adminId
       ? adminId
       : req.user.username;
-      
+
     const clients = getClients();
     const newId = clients.length > 0 ? Math.max(...clients.map(c => c.id)) + 1 : 1;
-    
+
     const newClient = {
       id: newId,
       name,
@@ -63,7 +63,7 @@ router.post('/clients', [authMiddleware, adminOrSuperAdminAuthMiddleware], (req,
       logApi: logApi || null,
       adminId: assignedAdminId
     };
-    
+
     clients.push(newClient);
     writeClientsToFile(clients);
     res.status(201).json({ success: true, client: newClient });
@@ -168,8 +168,8 @@ ADMIN_PASSWORD_${username}=${password}
     admins.push(newAdmin);
     writeAdminsToFile(admins);
 
-    res.status(201).json({ 
-      success: true, 
+    res.status(201).json({
+      success: true,
       message: 'Admin created successfully. They will need to setup MFA on first login.',
       admin: newAdmin
     });
@@ -227,8 +227,8 @@ router.patch('/admins/:id/block', [authMiddleware, superAdminAuthMiddleware], (r
     admins[adminIndex].blocked = blocked;
     writeAdminsToFile(admins);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `Admin ${blocked ? 'blocked' : 'unblocked'} successfully`,
       admin: admins[adminIndex]
     });
@@ -252,6 +252,69 @@ router.get('/admins/:id', [authMiddleware, superAdminAuthMiddleware], (req, res)
   } catch (error) {
     console.error('Error fetching admin:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch admin' });
+  }
+});
+
+router.post('/superadmins', [authMiddleware, mainSuperAdminAuthMiddleware], async (req, res) => {
+  try {
+    const { username, password, name, email, organization, city, state } = req.body;
+    if (!username || !password || !name || !email || !organization || !city || !state) {
+      return res.status(400).json({ success: false, message: 'All fields are required' });
+    }
+
+    const dotenv = require('dotenv');
+    const envPath = path.join(__dirname, '../.env');
+    const envConfig = dotenv.parse(fs.readFileSync(envPath));
+
+    // Check if superadmin already exists
+    if (envConfig[`SUPERADMIN_USERNAME_${username}`]) {
+      return res.status(400).json({ success: false, message: 'Superadmin already exists' });
+    }
+
+    // Create new superadmin credentials in .env
+    const newEnvContent = `
+SUPERADMIN_USERNAME_${username}=${username}
+SUPERADMIN_PASSWORD_${username}=${password}
+`;
+
+    fs.appendFileSync(envPath, newEnvContent, 'utf8');
+
+    // Reload environment variables
+    delete require.cache[require.resolve('dotenv')];
+    require('dotenv').config();
+
+    res.status(201).json({
+      success: true,
+      message: 'Superadmin created successfully. They will need to setup MFA on first login.',
+      superadmin: { username, name, email, organization, city, state }
+    });
+  } catch (error) {
+    console.error('Error creating superadmin:', error);
+    res.status(500).json({ success: false, message: 'Failed to create superadmin' });
+  }
+});
+
+router.get('/superadmins', [authMiddleware, mainSuperAdminAuthMiddleware], (req, res) => {
+  try {
+    const superadmins = [];
+
+    // Get all superadmin entries from environment variables
+    for (const key in process.env) {
+      if (key.startsWith('SUPERADMIN_USERNAME_')) {
+        const suffix = key.replace('SUPERADMIN_USERNAME_', '');
+        const username = process.env[key];
+        superadmins.push({
+          username,
+          suffix,
+          role: 'superadmin'
+        });
+      }
+    }
+
+    res.json(superadmins);
+  } catch (error) {
+    console.error('Error fetching superadmins:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch superadmins' });
   }
 });
 

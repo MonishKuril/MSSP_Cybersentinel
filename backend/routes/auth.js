@@ -26,23 +26,23 @@ const isAdminBlocked = (username) => {
 
 // Generate backup codes
 const generateBackupCodes = () => {
-  return Array.from({ length: 10 }, () => 
+  return Array.from({ length: 10 }, () =>
     crypto.randomBytes(4).toString('hex').toUpperCase()
   );
 };
 
 // Check if user has MFA setup
-const checkMFASetup = (username, role) => {
+const checkMFASetup = (username) => {
   const mfaSecret = process.env[`MFA_SECRET_${username}`];
   return !!mfaSecret;
 };
 
 // Setup MFA for user
 router.post('/setup-mfa', async (req, res) => {
-  const { username, role } = req.body;
-  
-  if (!username || !role) {
-    return res.status(400).json({ success: false, message: 'Username and role required' });
+  const { username } = req.body;
+
+  if (!username) {
+    return res.status(400).json({ success: false, message: 'Username required' });
   }
 
   try {
@@ -54,15 +54,15 @@ router.post('/setup-mfa', async (req, res) => {
 
     // Generate QR code
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
-    
+
     // Generate backup codes
     const backupCodes = generateBackupCodes();
-    
+
     // Store secret and backup codes in .env
     const envPath = path.join(__dirname, '../.env');
     const envContent = `\nMFA_SECRET_${username}=${secret.base32}\nMFA_BACKUP_${username}=${backupCodes.join(',')}\n`;
     fs.appendFileSync(envPath, envContent, 'utf8');
-    
+
     // Reload environment variables
     delete require.cache[require.resolve('dotenv')];
     require('dotenv').config();
@@ -83,9 +83,9 @@ router.post('/setup-mfa', async (req, res) => {
 const verifyMFAToken = (username, token) => {
   const secret = process.env[`MFA_SECRET_${username}`];
   const backupCodes = process.env[`MFA_BACKUP_${username}`];
-  
+
   if (!secret) return false;
-  
+
   // Check TOTP token
   const verified = speakeasy.totp.verify({
     secret: secret,
@@ -93,9 +93,9 @@ const verifyMFAToken = (username, token) => {
     token: token,
     window: 2
   });
-  
+
   if (verified) return true;
-  
+
   // Check backup codes
   if (backupCodes && backupCodes.includes(token.toUpperCase())) {
     // Remove used backup code
@@ -103,7 +103,7 @@ const verifyMFAToken = (username, token) => {
     updateEnvVariable(`MFA_BACKUP_${username}`, updatedCodes.join(','));
     return true;
   }
-  
+
   return false;
 };
 
@@ -112,40 +112,78 @@ const updateEnvVariable = (key, value) => {
   const envPath = path.join(__dirname, '../.env');
   let envContent = fs.readFileSync(envPath, 'utf8');
   const regex = new RegExp(`^${key}=.*$`, 'm');
-  
+
   if (regex.test(envContent)) {
     envContent = envContent.replace(regex, `${key}=${value}`);
   } else {
     envContent += `\n${key}=${value}`;
   }
-  
+
   fs.writeFileSync(envPath, envContent, 'utf8');
   delete require.cache[require.resolve('dotenv')];
   require('dotenv').config();
 };
+
 router.post('/login', (req, res) => {
   const { username, password, role, totpCode } = req.body;
 
-  // Validate credentials
+  // Auto-detect role based on credentials
+  let detectedRole = null;
   let validCredentials = false;
-  if (role === 'superadmin') {
-    validCredentials = username === process.env.SUPERADMIN_USERNAME && password === process.env.SUPERADMIN_PASSWORD;
-  } else if (role === 'admin') {
+
+  // Check main-superadmin first
+  if (username === process.env.MAIN_SUPERADMIN_USERNAME && password === process.env.MAIN_SUPERADMIN_PASSWORD) {
+    detectedRole = 'main-superadmin';
+    validCredentials = true;
+  }
+  // Check secondary superadmins
+  else {
+    // Check all SUPERADMIN_USERNAME_* environment variables
+    for (const key in process.env) {
+      if (key.startsWith('SUPERADMIN_USERNAME_')) {
+        const suffix = key.replace('SUPERADMIN_USERNAME_', '');
+        const superAdminUsername = process.env[key];
+        const superAdminPassword = process.env[`SUPERADMIN_PASSWORD_${suffix}`];
+
+        if (username === superAdminUsername && password === superAdminPassword) {
+          detectedRole = 'superadmin';
+          validCredentials = true;
+          break;
+        }
+      }
+    }
+  }
+
+  // Check regular admins if not found above
+  if (!validCredentials) {
     // Check if admin is blocked BEFORE validating credentials
     if (isAdminBlocked(username)) {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         message: 'Your account has been blocked by the administrator. Please contact support.',
-        blocked: true 
+        blocked: true
       });
     }
 
+    // Check legacy admin credentials
     if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+      detectedRole = 'admin';
       validCredentials = true;
     } else {
-      const adminUsername = process.env[`ADMIN_USERNAME_${username}`];
-      const adminPassword = process.env[`ADMIN_PASSWORD_${username}`];
-      validCredentials = username === adminUsername && password === adminPassword;
+      // Check new admin credentials
+      for (const key in process.env) {
+        if (key.startsWith('ADMIN_USERNAME_')) {
+          const suffix = key.replace('ADMIN_USERNAME_', '');
+          const adminUsername = process.env[key];
+          const adminPassword = process.env[`ADMIN_PASSWORD_${suffix}`];
+
+          if (username === adminUsername && password === adminPassword) {
+            detectedRole = 'admin';
+            validCredentials = true;
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -154,22 +192,22 @@ router.post('/login', (req, res) => {
   }
 
   // Check MFA setup
-  const hasMFA = checkMFASetup(username, role);
-  
+  const hasMFA = checkMFASetup(username, detectedRole);
+
   if (!hasMFA) {
-    return res.json({ 
-      success: true, 
+    return res.json({
+      success: true,
       requireMFASetup: true,
-      message: "MFA setup required" 
+      message: "MFA setup required"
     });
   }
 
   // Verify MFA token
   if (!totpCode) {
-    return res.json({ 
-      success: true, 
+    return res.json({
+      success: true,
       requireMFAToken: true,
-      message: "MFA token required" 
+      message: "MFA token required"
     });
   }
 
@@ -177,9 +215,9 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ success: false, message: "Invalid MFA token" });
   }
 
-  // Generate JWT token
+  // Generate JWT token with detected role
   const token = jwt.sign(
-    { username, role },
+    { username, role: detectedRole },
     process.env.JWT_SECRET,
     { expiresIn: '8h' }
   );

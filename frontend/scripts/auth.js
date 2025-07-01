@@ -11,10 +11,9 @@
       e.preventDefault();
       const username = document.getElementById('username').value;
       const password = document.getElementById('password').value;
-      const role = document.getElementById('role').value;
       const totpCode = document.getElementById('totpCode').value;
 
-      if (!username || !password || !role) {
+      if (!username || !password) {
         showMessage('Please fill in all fields');
         return;
       }
@@ -26,14 +25,14 @@
             'Content-Type': 'application/json',
           },
           credentials: 'include',
-          body: JSON.stringify({ username, password, role, totpCode })
+          body: JSON.stringify({ username, password, totpCode })
         });
 
         const data = await response.json();
 
         if (data.success) {
           if (data.requireMFASetup) {
-            currentUser = { username, password, role };
+            currentUser = { username, password };
             await setupMFA();
           } else if (data.requireMFAToken) {
             showTOTPInput();
@@ -54,7 +53,7 @@
       }
     });
   }
-  
+
   async function setupMFA() {
     try {
       const response = await fetch('/api/auth/setup-mfa', {
@@ -62,9 +61,8 @@
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          username: currentUser.username, 
-          role: currentUser.role 
+        body: JSON.stringify({
+          username: currentUser.username
         })
       });
 
@@ -84,21 +82,21 @@
   function showMFASetupModal(data) {
     const qrContainer = document.getElementById('qrCodeContainer');
     const backupContainer = document.getElementById('backupCodesContainer');
-    
+
     // Display QR code
     qrContainer.innerHTML = `<img src="${data.qrCode}" alt="QR Code" style="max-width: 200px;" />`;
-    
+
     // Display backup codes
-    const backupCodesHtml = data.backupCodes.map(code => 
+    const backupCodesHtml = data.backupCodes.map(code =>
       `<span class="backup-code">${code}</span>`
     ).join('');
     backupContainer.innerHTML = backupCodesHtml;
-    
+
     mfaSetupModal.classList.remove('hidden');
-    
+
     // Setup verify button
     document.getElementById('verifyMfaBtn').onclick = verifyMFASetup;
-    
+
     // Setup download backup codes
     document.getElementById('downloadBackupCodes').onclick = () => {
       downloadBackupCodes(data.backupCodes);
@@ -119,10 +117,9 @@
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           username: currentUser.username,
           password: currentUser.password,
-          role: currentUser.role,
           totpCode: verifyCode
         })
       });
@@ -147,7 +144,7 @@
 
   function downloadBackupCodes(codes) {
     const content = `MSSP Console - Backup Codes\n\nUsername: ${currentUser.username}\nGenerated: ${new Date().toISOString()}\n\nBackup Codes:\n${codes.join('\n')}\n\nKeep these codes safe and secure!`;
-    
+
     const blob = new Blob([content], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
