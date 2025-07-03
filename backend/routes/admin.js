@@ -15,6 +15,22 @@ const getClients = () => {
   }
 };
 
+const getSuperadmins = () => {
+  try {
+    delete require.cache[require.resolve('../config/superadmin')];
+    return require('../config/superadmin');
+  } catch (error) {
+    console.error('Error reading superadmins:', error);
+    return [];
+  }
+};
+
+const writeSuperadminsToFile = (superadmins) => {
+  const superadminsFilePath = path.join(__dirname, '../config/superadmin.js');
+  const superadminsContent = `module.exports = ${JSON.stringify(superadmins, null, 4)};`;
+  fs.writeFileSync(superadminsFilePath, superadminsContent, 'utf8');
+};
+
 const writeClientsToFile = (clients) => {
   const clientsContent = `module.exports = ${JSON.stringify(clients, null, 4)};`;
   fs.writeFileSync(clientsFilePath, clientsContent, 'utf8');
@@ -262,31 +278,39 @@ router.post('/superadmins', [authMiddleware, mainSuperAdminAuthMiddleware], asyn
       return res.status(400).json({ success: false, message: 'All fields are required' });
     }
 
-    const dotenv = require('dotenv');
-    const envPath = path.join(__dirname, '../.env');
-    const envConfig = dotenv.parse(fs.readFileSync(envPath));
-
     // Check if superadmin already exists
-    if (envConfig[`SUPERADMIN_USERNAME_${username}`]) {
+    const superadmins = getSuperadmins();
+    const exists = superadmins.some(s => s.name === username || s.email === email);
+    if (exists) {
       return res.status(400).json({ success: false, message: 'Superadmin already exists' });
     }
 
-    // Create new superadmin credentials in .env
+    // Add to .env
+    const envPath = path.join(__dirname, '../.env');
     const newEnvContent = `
 SUPERADMIN_USERNAME_${username}=${username}
 SUPERADMIN_PASSWORD_${username}=${password}
 `;
-
     fs.appendFileSync(envPath, newEnvContent, 'utf8');
 
-    // Reload environment variables
-    delete require.cache[require.resolve('dotenv')];
-    require('dotenv').config();
+    // Add to superadmin.js
+    const newSuperadmin = {
+      id: superadmins.length > 0 ? Math.max(...superadmins.map(s => s.id)) + 1 : 1,
+      name,
+      email,
+      organization,
+      city,
+      state,
+      blocked: false
+    };
+    
+    superadmins.push(newSuperadmin);
+    writeSuperadminsToFile(superadmins);
 
     res.status(201).json({
       success: true,
-      message: 'Superadmin created successfully. They will need to setup MFA on first login.',
-      superadmin: { username, name, email, organization, city, state }
+      message: 'Superadmin created successfully',
+      superadmin: newSuperadmin
     });
   } catch (error) {
     console.error('Error creating superadmin:', error);
@@ -294,19 +318,76 @@ SUPERADMIN_PASSWORD_${username}=${password}
   }
 });
 
+// Update the PUT /admins/:id route
+router.put('/admins/:id', [authMiddleware, superAdminAuthMiddleware], async (req, res) => {
+  try {
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+
+    const adminId = parseInt(req.params.id);
+    if (isNaN(adminId)) throw new Error('Invalid admin ID');
+
+    const { name, email, organization, city, state } = req.body;
+    if (!name || !email || !organization || !city || !state) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'All fields are required' 
+      });
+    }
+
+    const admins = getAdmins();
+    const adminIndex = admins.findIndex(a => a.id === adminId);
+    
+    if (adminIndex === -1) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Admin not found' 
+      });
+    }
+
+    // Update admin
+    admins[adminIndex] = { ...admins[adminIndex], name, email, organization, city, state };
+    writeAdminsToFile(admins);
+
+    res.json({
+      success: true,
+      message: 'Admin updated successfully',
+      admin: admins[adminIndex]
+    });
+
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+// Add this route to fetch superadmins
 router.get('/superadmins', [authMiddleware, mainSuperAdminAuthMiddleware], (req, res) => {
   try {
     const superadmins = [];
+    const envVars = process.env;
 
     // Get all superadmin entries from environment variables
-    for (const key in process.env) {
+    for (const key in envVars) {
       if (key.startsWith('SUPERADMIN_USERNAME_')) {
         const suffix = key.replace('SUPERADMIN_USERNAME_', '');
-        const username = process.env[key];
+        const username = envVars[key];
+        
+        // Get corresponding superadmin details from superadmin.js
+        const superadminData = getSuperadmins().find(s => s.username === username);
+        
         superadmins.push({
           username,
-          suffix,
-          role: 'superadmin'
+          name: superadminData?.name || 'N/A',
+          email: superadminData?.email || 'N/A',
+          organization: superadminData?.organization || 'N/A',
+          city: superadminData?.city || 'N/A',
+          state: superadminData?.state || 'N/A',
+          blocked: superadminData?.blocked || false,
+          createdAt: superadminData?.createdAt || new Date().toISOString()
         });
       }
     }
@@ -318,6 +399,35 @@ router.get('/superadmins', [authMiddleware, mainSuperAdminAuthMiddleware], (req,
   }
 });
 
-
+router.patch('/superadmins/:username/block', [authMiddleware, mainSuperAdminAuthMiddleware], (req, res) => {
+  try {
+    const { username } = req.params;
+    const { blocked } = req.body;
+    
+    if (typeof blocked !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Invalid blocked status' });
+    }
+    
+    // Update in superadmin.js
+    const superadmins = getSuperadmins();
+    const index = superadmins.findIndex(s => s.username === username);
+    
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Superadmin not found' });
+    }
+    
+    superadmins[index].blocked = blocked;
+    writeSuperadminsToFile(superadmins);
+    
+    res.json({
+      success: true,
+      message: `Superadmin ${blocked ? 'blocked' : 'unblocked'} successfully`
+    });
+    
+  } catch (error) {
+    console.error('Error updating superadmin:', error);
+    res.status(500).json({ success: false, message: 'Failed to update superadmin' });
+  }
+});
 
 module.exports = router;

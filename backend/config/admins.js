@@ -1,6 +1,24 @@
 module.exports = [
     {
-        "id": 4,
+        "id": 1,
+        "name": "virtual",
+        "email": "Virtual@gmail.com",
+        "organization": "Virtual",
+        "city": "Nagpur",
+        "state": "Maharastra",
+        "blocked": false
+    },
+    {
+        "id": 2,
+        "name": "moni",
+        "email": "moni@gmail.com",
+        "organization": "Virtual",
+        "city": "Nagpur",
+        "state": "Maharastra",
+        "blocked": false
+    },
+    {
+        "id": 3,
         "name": "lucy",
         "email": "lucy@gmail.com",
         "organization": "luccy",
@@ -9,7 +27,7 @@ module.exports = [
         "blocked": false
     },
     {
-        "id": 6,
+        "id": 4,
         "name": "CyberSentinel",
         "email": "admin@gmail.com",
         "organization": "Virtual Galaxy Infotech",
@@ -19,10 +37,20 @@ module.exports = [
         "blocked": true
     },
     {
-        "id": 7,
+        "id": 5,
         "name": "Sentinex",
         "email": "naveengawande@gmail.com",
         "organization": "Virtual Galaxy Infotech",
+        "city": "Nagpur",
+        "state": "Maharashtra",
+        "mfaSecret": null,
+        "blocked": false
+    },
+    {
+        "id": 6,
+        "name": "Yash",
+        "email": "yash.katarpawar@vgipl.in",
+        "organization": "VGIL",
         "city": "Nagpur",
         "state": "Maharashtra",
         "mfaSecret": null,

@@ -1,4 +1,3 @@
-const clientHistory = {};
 let newsTickerPaused = false;
 let lastNewsUpdate = null;
 
@@ -208,132 +207,200 @@ function setupFormHandlers() {
 async function loadClients() {
   const dashboardGrid = document.getElementById("dashboardView");
   if (!dashboardGrid) return;
+
+  // Show loading state
   dashboardGrid.innerHTML = '<div class="loading">Loading clients...</div>';
+
   try {
-    const response = await fetch("/api/clients", { credentials: "include" });
-    if (!response.ok) throw new Error("Failed to load clients");
-    const clients = await response.json();
-    if (clients.length === 0) {
-      dashboardGrid.innerHTML =
-        '<div class="no-clients">No clients found. Click "Manage Clients" to add clients.</div>';
+    // First check the user's authentication and role
+    const authData = await window.__auth.checkAuth();
+    if (!authData.authenticated) {
+      window.location.href = "/login.html";
       return;
     }
+
+    // Fetch clients from API
+    const response = await fetch("/api/clients", { 
+      credentials: "include" 
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    let clients = await response.json();
+
+    // Filter clients based on role
+    if (authData.role === 'admin') {
+      // Regular admins only see their own clients
+      clients = clients.filter(client => 
+        client.adminId === authData.username || 
+        client.adminId === authData.name
+      );
+    }
+    // Superadmins and main-superadmins see all clients (no filtering)
+
+    if (clients.length === 0) {
+      // Show appropriate empty state message based on role
+      const message = authData.role === 'admin' 
+        ? 'No clients assigned to you. Contact your superadmin.' 
+        : 'No clients found. Add clients using the management panel.';
+      
+      dashboardGrid.innerHTML = `
+        <div class="no-clients">
+          ${message}
+          ${authData.role !== 'admin' ? 
+            '<button id="addFirstClientBtn" class="action-btn">+ Add First Client</button>' : ''}
+        </div>
+      `;
+      
+      document.getElementById('addFirstClientBtn')?.addEventListener('click', () => {
+        toggleManagementView();
+      });
+      return;
+    }
+
+    // Clear the loading state
     dashboardGrid.innerHTML = "";
+
+    // Create client cards
     for (const client of clients) {
-      let logCount = "Loading...";
-      let lastActive = "Just now";
       const clientCard = document.createElement("div");
       clientCard.className = "client-card";
       clientCard.dataset.clientId = client.id;
+      clientCard.dataset.url = client.url;
+      
       clientCard.innerHTML = `
-                <div class="client-card-header">
-                    <div class="client-icon" style="background: ${getRandomColor()}">
-                        ${client.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                        <div class="client-name">${escapeHtml(
-        client.name
-      )}</div>
-                        <div class="client-url">${escapeHtml(client.url)}</div>
-                    </div>
-                </div>
-                <div class="client-description">
-                    ${escapeHtml(
-        client.description || "No description available"
-      )}
-                </div>
-                    
-                <div class="client-status">
-                    <span>
-                        <span class="status-indicator status-active"></span>
-                        <span class="status-text">Active</span>
-                    </span>
-                    <span class="log-count-wrapper">
-                        Logs (10s): <span class="log-count">0</span>
-                    </span>
-                </div>
-  
-                <!-- Current Log Graph -->
-                <div class="log-graph-container">
-                    <div class="log-graph">
-                        <div class="graph-bar" style="width: 0%"></div>
-                        <div class="timer-line"></div>
-                    </div>
-                    <div class="graph-labels">
-                        <span>0</span>
-                        <span>50</span>
-                        <span>100+</span>
-                    </div>
-                </div>
-                    
-                      <div class="client-stats-container">
-                        <div class="stat-item">
-                            <span class="stat-label">Total Logs:</span>
-                            <span class="stat-value total-logs">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Major:</span>
-                            <span class="stat-value major-logs">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Normal:</span>
-                            <span class="stat-value normal-logs">0</span>
-                        </div>
-                    </div>
+        <div class="client-card-header">
+          <div class="client-icon" style="background: ${getRandomColor()}">
+            ${client.name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div class="client-name">${escapeHtml(client.name)}</div>
+            <div class="client-url">${escapeHtml(client.url)}</div>
+          </div>
+        </div>
+        <div class="client-description">
+          ${escapeHtml(client.description || "No description available")}
+        </div>
+        <div class="client-status">
+          <span>
+            <span class="status-indicator status-active"></span>
+            <span class="status-text">Active</span>
+          </span>
+          <span class="log-count-wrapper">
+            Logs (10s): <span class="log-count">0</span>
+          </span>
+        </div>
+        <div class="log-graph-container">
+          <div class="log-graph">
+            <div class="graph-bar" style="width: 0%"></div>
+            <div class="timer-line"></div>
+          </div>
+          <div class="graph-labels">
+            <span>0</span>
+            <span>50</span>
+            <span>100+</span>
+          </div>
+        </div>
+        <div class="client-stats-container">
+          <div class="stat-item">
+            <span class="stat-label">Total Logs:</span>
+            <span class="stat-value total-logs">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Major:</span>
+            <span class="stat-value major-logs">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Normal:</span>
+            <span class="stat-value normal-logs">0</span>
+          </div>
+        </div>
+        <div class="history-graph">
+          <div class="graph-labels" style="padding-bottom: 5px;">
+            <span>Logs (Last 60s)</span>
+            <span class="history-average">Avg: 0</span>
+          </div>
+          <div class="history-bars" id="historyGraph-${client.id}">
+            ${Array(12).fill('<div class="history-bar" style="height: 0%" data-count="0"></div>').join('')}
+          </div>
+        </div>
+        <div class="client-status">
+          <span>Last active: Just now</span>
+          <span class="last-updated">Updating...</span>
+        </div>
+      `;
 
-                <!-- Historical Log Graph (Last 60 seconds) -->
-                <div class="history-graph">
-                    <div class="graph-labels" style="padding-bottom: 5px;">
-                        <span>Logs (Last 60s)</span>
-                        <span class="history-average">Avg: 0</span>
-                    </div>
-                    <div class="history-bars" id="historyGraph-${client.id}">
-                        <!-- Bars will be added dynamically -->
-                    </div>
-                </div><br>
-                    
-                <div class="client-status">
-                    <span>Last active: Just now</span>
-                    <span class="last-updated">Updating...</span>
-                </div>     
-            `;
-      ////////
+      // Add click handler to open dashboard
+      clientCard.addEventListener("click", () => {
+        window.open(client.url, "_blank");
+      });
 
-      /////////////
-      function getRandomColor() {
-        const colors = [
-          "linear-gradient(135deg, #3498db, #2ecc71)",
-          "linear-gradient(135deg, #e74c3c, #f39c12)",
-          "linear-gradient(135deg, #9b59b6, #3498db)",
-          "linear-gradient(135deg, #1abc9c, #2ecc71)",
-          "linear-gradient(135deg, #f1c40f, #e67e22)",
-        ];
-        return colors[Math.floor(Math.random() * colors.length)];
-      }
-
-      const historyGraph = clientCard.querySelector(
-        `#historyGraph-${client.id}`
-      );
-      for (let i = 0; i < 12; i++) {
-        const bar = document.createElement("div");
-        bar.className = "history-bar";
-        bar.style.height = "0%";
-        bar.dataset.count = "0";
-        historyGraph.appendChild(bar);
-      }
-
-      clientCard.addEventListener("click", () => openClientDashboard(client));
       dashboardGrid.appendChild(clientCard);
-      // Fetch log count for this client
+      
+      // Initialize log data for this client
       fetchLogCount(client.id);
+      clientHistory[client.id] = [];
     }
-    setInterval(refreshAllLogCounts, 10000);
+
+    // Set up periodic refresh
+    const refreshInterval = setInterval(refreshAllLogCounts, 10000);
+    
+    // Clean up interval when leaving the page
+    window.addEventListener('beforeunload', () => {
+      clearInterval(refreshInterval);
+    });
+
   } catch (error) {
     console.error("Error loading clients:", error);
-    dashboardGrid.innerHTML =
-      '<div class="error">Error loading clients. Click Refresh to try again.</div>';
+    dashboardGrid.innerHTML = `
+      <div class="error">
+        Error loading clients. 
+        <button id="retryLoadingBtn">Click to Retry</button>
+      </div>
+    `;
+    
+    document.getElementById('retryLoadingBtn').addEventListener('click', loadClients);
   }
 }
+
+// Helper functions used in loadClients()
+function getRandomColor() {
+  const colors = [
+    "linear-gradient(135deg, #3498db, #2ecc71)",
+    "linear-gradient(135deg, #e74c3c, #f39c12)",
+    "linear-gradient(135deg, #9b59b6, #3498db)",
+    "linear-gradient(135deg, #1abc9c, #2ecc71)",
+    "linear-gradient(135deg, #f1c40f, #e67e22)",
+  ];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function escapeHtml(text) {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Global variable to track client history
+const clientHistory = {};
+
+async function refreshAllLogCounts() {
+  const clientCards = document.querySelectorAll(".client-card");
+  clientCards.forEach((card) => {
+    const clientId = card.dataset.clientId;
+    if (clientId) {
+      fetchLogCount(parseInt(clientId));
+    }
+  });
+  updateLeaderboard();
+}
+
 async function fetchLogCount(clientId) {
   try {
     const response = await fetch(`/api/clients/${clientId}/logs`, {
@@ -1295,49 +1362,58 @@ async function showEditAdminModal(adminId) {
 // Function to handle edit admin form submission
 async function editAdminSubmitHandler(e) {
   e.preventDefault();
-
-  const adminId = document.getElementById("editAdminId").value;
-  const name = document.getElementById("editAdminName").value.trim();
-  const email = document.getElementById("editAdminEmail").value.trim();
-  const organization = document.getElementById("editAdminOrganization").value.trim();
-  const city = document.getElementById("editAdminCity").value.trim();
-  const state = document.getElementById("editAdminState").value.trim();
-
-  if (!name || !email || !organization || !city || !state) {
-    showMessage("All fields are required", "error");
-    return;
-  }
-
-  // Basic email validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    showMessage("Please enter a valid email address", "error");
-    return;
-  }
-
+  const form = e.target;
+  const submitBtn = form.querySelector('button[type="submit"]');
+  
   try {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Updating...';
+
+    const adminId = document.getElementById('editAdminId').value;
+    const adminData = {
+      name: document.getElementById('editAdminName').value.trim(),
+      email: document.getElementById('editAdminEmail').value.trim(),
+      organization: document.getElementById('editAdminOrganization').value.trim(),
+      city: document.getElementById('editAdminCity').value.trim(),
+      state: document.getElementById('editAdminState').value.trim()
+    };
+
     const response = await fetch(`/api/admin/admins/${adminId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ name, email, organization, city, state }),
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify(adminData)
     });
 
-    const data = await response.json();
-    if (data.success) {
-      showMessage("Admin updated successfully", "success");
-      document.getElementById("editAdminModal").classList.add("hidden");
-      // Refresh the admins table
-      await loadAdminsAndClients();
-    } else {
-      showMessage(data.message || "Failed to update admin", "error");
+    const text = await response.text();
+    let data;
+    
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('Failed to parse response:', text);
+      throw new Error(`Server returned: ${text.substring(0, 100)}...`);
     }
+
+    if (!response.ok) {
+      throw new Error(data.message || `HTTP ${response.status}`);
+    }
+
+    showMessage('Admin updated successfully', 'success');
+    document.getElementById('editAdminModal').classList.add('hidden');
+    await loadAdminsAndClients();
+
   } catch (error) {
-    console.error("Error updating admin:", error);
-    showMessage("Error updating admin", "error");
+    console.error('Update error:', error);
+    showMessage(`Update failed: ${error.message}`, 'error');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Update Admin';
   }
 }
-
 
 function showSuperAdminAddClientModal(adminId, adminUsername) {
   console.log('showSuperAdminAddClientModal called with:', adminId, adminUsername);

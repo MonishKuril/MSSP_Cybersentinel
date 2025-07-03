@@ -18,13 +18,28 @@ const getClients = () => {
 
 router.get('/', authMiddleware, (req, res) => {
   try {
+    // Debug: Log the clients data being read
     const clients = getClients();
-    if (req.user.role === 'superadmin') {
-      res.json(clients);
-    } else {
-      const adminClients = clients.filter(client => client.adminId === req.user.username);
-      res.json(adminClients);
+    console.log("Raw clients data from file:", clients);
+    
+    // Ensure we're always returning an array
+    if (!Array.isArray(clients)) {
+      console.error("Clients data is not an array, converting...");
+      return res.json([]);
     }
+    
+    // For superadmins/main-superadmins, return all clients
+    if (req.user.role === 'superadmin' || req.user.role === 'main-superadmin') {
+      return res.json(clients);
+    }
+    
+    // For regular admins, filter by adminId
+    const adminClients = clients.filter(client => 
+      client.adminId === req.user.username || 
+      client.adminId === req.user.name
+    );
+    
+    res.json(adminClients);
   } catch (error) {
     console.error('Error fetching clients:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch clients' });
