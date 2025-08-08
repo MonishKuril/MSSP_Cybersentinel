@@ -21,6 +21,11 @@ const getSuperadmins = () => {
     return require('../config/superadmin');
   } catch (error) {
     console.error('Error reading superadmins:', error);
+    // Create empty superadmin.js file if it doesn't exist
+    const superadminFilePath = path.join(__dirname, '../config/superadmin.js');
+    if (!fs.existsSync(superadminFilePath)) {
+      fs.writeFileSync(superadminFilePath, 'module.exports = [];', 'utf8');
+    }
     return [];
   }
 };
@@ -53,6 +58,25 @@ const getAdmins = () => {
 const writeAdminsToFile = (admins) => {
   const adminsContent = `module.exports = ${JSON.stringify(admins, null, 4)};`;
   fs.writeFileSync(adminsFilePath, adminsContent, 'utf8');
+};
+
+// Helper function to get next available suffix for environment variables
+const getNextEnvSuffix = (prefix) => {
+  let suffix = 1;
+  while (process.env[`${prefix}_${suffix}`]) {
+    suffix++;
+  }
+  return suffix;
+};
+
+// Helper function to check if superadmin exists in environment variables
+const checkSuperadminExistsInEnv = (username) => {
+  for (const key in process.env) {
+    if (key.startsWith('SUPERADMIN_USERNAME_') && process.env[key] === username) {
+      return true;
+    }
+  }
+  return false;
 };
 
 ////////////
@@ -142,6 +166,9 @@ router.delete('/clients/:id', [authMiddleware, adminAuthMiddleware], (req, res) 
 
 router.post('/admins', [authMiddleware, superAdminAuthMiddleware], async (req, res) => {
   try {
+    console.log('🔧 Creating new admin...');
+    console.log('Request body:', req.body);
+    
     const { username, password, name, email, organization, city, state } = req.body;
     if (!username || !password || !name || !email || !organization || !city || !state) {
       return res.status(400).json({ success: false, message: 'All fields are required' });
@@ -151,28 +178,34 @@ router.post('/admins', [authMiddleware, superAdminAuthMiddleware], async (req, r
     const envPath = path.join(__dirname, '../.env');
     const envConfig = dotenv.parse(fs.readFileSync(envPath));
 
-    // Check if admin already exists
+    // Check if admin already exists in environment variables
     if (envConfig[`ADMIN_USERNAME_${username}`]) {
+      console.log(`❌ Admin ${username} already exists in .env`);
       return res.status(400).json({ success: false, message: 'Admin already exists' });
     }
 
-    // Create new admin credentials in .env
-    const newEnvContent = `
-ADMIN_USERNAME_${username}=${username}
-ADMIN_PASSWORD_${username}=${password}
-`;
+    // Check if admin already exists in admins.js (by email or name)
+    const admins = getAdmins();
+    const existingAdmin = admins.find(a => a.email === email || a.name === username);
+    if (existingAdmin) {
+      console.log(`❌ Admin with email ${email} or name ${username} already exists in admins.js`);
+      return res.status(400).json({ success: false, message: 'Admin with this email or username already exists' });
+    }
 
+    // Create new admin credentials in .env
+    const newEnvContent = `\nADMIN_USERNAME_${username}=${username}\nADMIN_PASSWORD_${username}=${password}\n`;
     fs.appendFileSync(envPath, newEnvContent, 'utf8');
 
     // Reload environment variables
     delete require.cache[require.resolve('dotenv')];
     require('dotenv').config();
 
+    console.log(`✅ Added admin ${username} to .env`);
+
     // Add admin details to admins.js with blocked field
-    const admins = getAdmins();
     const newAdmin = {
       id: admins.length > 0 ? Math.max(...admins.map(a => a.id)) + 1 : 1,
-      name,
+      name: username, // Use username as name for consistency
       email,
       organization,
       city,
@@ -184,13 +217,15 @@ ADMIN_PASSWORD_${username}=${password}
     admins.push(newAdmin);
     writeAdminsToFile(admins);
 
+    console.log(`✅ Added admin details to admins.js`);
+
     res.status(201).json({
       success: true,
       message: 'Admin created successfully. They will need to setup MFA on first login.',
       admin: newAdmin
     });
   } catch (error) {
-    console.error('Error creating admin:', error);
+    console.error('❌ Error creating admin:', error);
     res.status(500).json({ success: false, message: 'Failed to create admin' });
   }
 });
@@ -271,41 +306,64 @@ router.get('/admins/:id', [authMiddleware, superAdminAuthMiddleware], (req, res)
   }
 });
 
+// FIXED: Superadmin creation route
 router.post('/superadmins', [authMiddleware, mainSuperAdminAuthMiddleware], async (req, res) => {
   try {
+    console.log('🔧 Creating new superadmin...');
+    console.log('Request body:', req.body);
+    
     const { username, password, name, email, organization, city, state } = req.body;
+    
     if (!username || !password || !name || !email || !organization || !city || !state) {
+      console.log('❌ Missing required fields');
       return res.status(400).json({ success: false, message: 'All fields are required' });
     }
 
-    // Check if superadmin already exists
-    const superadmins = getSuperadmins();
-    const exists = superadmins.some(s => s.name === username || s.email === email);
-    if (exists) {
+    // Check if superadmin already exists in environment variables (by username)
+    if (checkSuperadminExistsInEnv(username)) {
+      console.log(`❌ Superadmin ${username} already exists in environment variables`);
       return res.status(400).json({ success: false, message: 'Superadmin already exists' });
     }
 
-    // Add to .env
+    // Check if superadmin already exists in superadmin.js (by username or email)
+    const superadmins = getSuperadmins();
+    const existingSuperadmin = superadmins.find(s => s.username === username || s.email === email);
+    if (existingSuperadmin) {
+      console.log(`❌ Superadmin with username ${username} or email ${email} already exists in superadmin.js`);
+      return res.status(400).json({ success: false, message: 'Superadmin with this username or email already exists' });
+    }
+
+    // Get next available suffix for environment variables
+    const suffix = getNextEnvSuffix('SUPERADMIN_USERNAME');
+    
+    // Add to .env with unique suffix
     const envPath = path.join(__dirname, '../.env');
-    const newEnvContent = `
-SUPERADMIN_USERNAME_${username}=${username}
-SUPERADMIN_PASSWORD_${username}=${password}
-`;
+    const newEnvContent = `\nSUPERADMIN_USERNAME_${suffix}=${username}\nSUPERADMIN_PASSWORD_${suffix}=${password}\n`;
     fs.appendFileSync(envPath, newEnvContent, 'utf8');
+
+    // Reload environment variables
+    delete require.cache[require.resolve('dotenv')];
+    require('dotenv').config();
+
+    console.log(`✅ Added superadmin ${username} to .env with suffix ${suffix}`);
 
     // Add to superadmin.js
     const newSuperadmin = {
       id: superadmins.length > 0 ? Math.max(...superadmins.map(s => s.id)) + 1 : 1,
+      username, // Store username for consistency
       name,
       email,
       organization,
       city,
       state,
-      blocked: false
+      blocked: false,
+      createdAt: new Date().toISOString()
     };
     
     superadmins.push(newSuperadmin);
     writeSuperadminsToFile(superadmins);
+
+    console.log(`✅ Added superadmin details to superadmin.js`);
 
     res.status(201).json({
       success: true,
@@ -313,7 +371,7 @@ SUPERADMIN_PASSWORD_${username}=${password}
       superadmin: newSuperadmin
     });
   } catch (error) {
-    console.error('Error creating superadmin:', error);
+    console.error('❌ Error creating superadmin:', error);
     res.status(500).json({ success: false, message: 'Failed to create superadmin' });
   }
 });
@@ -364,11 +422,17 @@ router.put('/admins/:id', [authMiddleware, superAdminAuthMiddleware], async (req
     });
   }
 });
-// Add this route to fetch superadmins
+
+// FIXED: Fetch superadmins route
 router.get('/superadmins', [authMiddleware, mainSuperAdminAuthMiddleware], (req, res) => {
   try {
+    console.log('🔍 Fetching superadmins...');
+    
     const superadmins = [];
     const envVars = process.env;
+    const superadminData = getSuperadmins();
+
+    console.log('Available superadmin data from file:', superadminData);
 
     // Get all superadmin entries from environment variables
     for (const key in envVars) {
@@ -376,25 +440,30 @@ router.get('/superadmins', [authMiddleware, mainSuperAdminAuthMiddleware], (req,
         const suffix = key.replace('SUPERADMIN_USERNAME_', '');
         const username = envVars[key];
         
+        console.log(`Found superadmin in env: ${username} (suffix: ${suffix})`);
+        
         // Get corresponding superadmin details from superadmin.js
-        const superadminData = getSuperadmins().find(s => s.username === username);
+        const superadminDetails = superadminData.find(s => s.username === username);
+        
+        console.log(`Superadmin details for ${username}:`, superadminDetails);
         
         superadmins.push({
           username,
-          name: superadminData?.name || 'N/A',
-          email: superadminData?.email || 'N/A',
-          organization: superadminData?.organization || 'N/A',
-          city: superadminData?.city || 'N/A',
-          state: superadminData?.state || 'N/A',
-          blocked: superadminData?.blocked || false,
-          createdAt: superadminData?.createdAt || new Date().toISOString()
+          name: superadminDetails?.name || 'N/A',
+          email: superadminDetails?.email || 'N/A',
+          organization: superadminDetails?.organization || 'N/A',
+          city: superadminDetails?.city || 'N/A',
+          state: superadminDetails?.state || 'N/A',
+          blocked: superadminDetails?.blocked || false,
+          createdAt: superadminDetails?.createdAt || new Date().toISOString()
         });
       }
     }
 
+    console.log('Final superadmins list:', superadmins);
     res.json(superadmins);
   } catch (error) {
-    console.error('Error fetching superadmins:', error);
+    console.error('❌ Error fetching superadmins:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch superadmins' });
   }
 });
