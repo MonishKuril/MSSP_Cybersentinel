@@ -31,10 +31,17 @@ const generateBackupCodes = () => {
   );
 };
 
-// Check if user has MFA setup - FIXED: Only takes username parameter
+// Check if user has MFA setup - Enhanced with debug logging
 const checkMFASetup = (username) => {
   const mfaSecret = process.env[`MFA_SECRET_${username}`];
-  console.log(`Checking MFA setup for ${username}:`, !!mfaSecret);
+  console.log(`🔍 Checking MFA setup for ${username}:`);
+  console.log(`   - MFA Secret exists: ${!!mfaSecret}`);
+  console.log(`   - Looking for env var: MFA_SECRET_${username}`);
+  
+  // Additional debug: check all MFA-related env vars
+  const mfaEnvVars = Object.keys(process.env).filter(key => key.startsWith('MFA_SECRET_'));
+  console.log(`   - Available MFA secrets: ${mfaEnvVars.join(', ')}`);
+  
   return !!mfaSecret;
 };
 
@@ -47,6 +54,8 @@ router.post('/setup-mfa', async (req, res) => {
   }
 
   try {
+    console.log(`🔧 Setting up MFA for username: ${username}`);
+    
     // Generate secret
     const secret = speakeasy.generateSecret({
       name: `MSSP Console (${username})`,
@@ -68,6 +77,8 @@ router.post('/setup-mfa', async (req, res) => {
     delete require.cache[require.resolve('dotenv')];
     require('dotenv').config();
 
+    console.log(`✅ MFA setup complete for ${username}`);
+
     res.json({
       success: true,
       qrCode: qrCodeUrl,
@@ -75,18 +86,23 @@ router.post('/setup-mfa', async (req, res) => {
       secret: secret.base32
     });
   } catch (error) {
-    console.error('MFA setup error:', error);
+    console.error('❌ MFA setup error:', error);
     res.status(500).json({ success: false, message: 'Failed to setup MFA' });
   }
 });
 
-// Verify MFA token
+// Verify MFA token - Enhanced with debug logging
 const verifyMFAToken = (username, token) => {
+  console.log(`🔐 Verifying MFA token for ${username}`);
+  
   const secret = process.env[`MFA_SECRET_${username}`];
   const backupCodes = process.env[`MFA_BACKUP_${username}`];
 
+  console.log(`   - Secret exists: ${!!secret}`);
+  console.log(`   - Backup codes exist: ${!!backupCodes}`);
+
   if (!secret) {
-    console.log(`No MFA secret found for ${username}`);
+    console.log(`❌ No MFA secret found for ${username}`);
     return false;
   }
 
@@ -99,20 +115,20 @@ const verifyMFAToken = (username, token) => {
   });
 
   if (verified) {
-    console.log(`TOTP verified for ${username}`);
+    console.log(`✅ TOTP verified for ${username}`);
     return true;
   }
 
   // Check backup codes
   if (backupCodes && backupCodes.includes(token.toUpperCase())) {
-    console.log(`Backup code verified for ${username}`);
+    console.log(`✅ Backup code verified for ${username}`);
     // Remove used backup code
     const updatedCodes = backupCodes.split(',').filter(code => code !== token.toUpperCase());
     updateEnvVariable(`MFA_BACKUP_${username}`, updatedCodes.join(','));
     return true;
   }
 
-  console.log(`MFA verification failed for ${username}`);
+  console.log(`❌ MFA verification failed for ${username}`);
   return false;
 };
 
@@ -136,27 +152,35 @@ const updateEnvVariable = (key, value) => {
 router.post('/login', (req, res) => {
   const { username, password, role, totpCode } = req.body;
 
-  console.log('Login attempt:', { username, hasPassword: !!password, hasTotpCode: !!totpCode });
+  console.log('🚀 Login attempt started');
+  console.log(`   - Username: ${username}`);
+  console.log(`   - Has Password: ${!!password}`);
+  console.log(`   - Has TOTP Code: ${!!totpCode}`);
+  console.log(`   - Requested Role: ${role || 'auto-detect'}`);
 
   // Auto-detect role based on credentials
   let detectedRole = null;
   let validCredentials = false;
 
   // Check main-superadmin first
-  console.log('Checking main-superadmin credentials...');
-  console.log('Expected username:', process.env.MAIN_SUPERADMIN_USERNAME);
-  console.log('Expected password:', process.env.MAIN_SUPERADMIN_PASSWORD);
-  console.log('Provided username:', username);
-  console.log('Provided password:', password);
+  console.log('🔍 Checking main-superadmin credentials...');
+  console.log(`   - Expected username: ${process.env.MAIN_SUPERADMIN_USERNAME}`);
+  console.log(`   - Provided username: ${username}`);
+  console.log(`   - Username match: ${username === process.env.MAIN_SUPERADMIN_USERNAME}`);
+  console.log(`   - Password match: ${password === process.env.MAIN_SUPERADMIN_PASSWORD}`);
 
   if (username === process.env.MAIN_SUPERADMIN_USERNAME && password === process.env.MAIN_SUPERADMIN_PASSWORD) {
-    console.log('Main superadmin credentials matched');
+    console.log('✅ Main superadmin credentials matched');
     detectedRole = 'main-superadmin';
     validCredentials = true;
   }
   // Check secondary superadmins
   else {
-    console.log('Checking secondary superadmins...');
+    console.log('🔍 Checking secondary superadmins...');
+    // Get all superadmin env vars for debugging
+    const superAdminEnvVars = Object.keys(process.env).filter(key => key.startsWith('SUPERADMIN_USERNAME_'));
+    console.log(`   - Available superadmin usernames: ${superAdminEnvVars.join(', ')}`);
+    
     // Check all SUPERADMIN_USERNAME_* environment variables
     for (const key in process.env) {
       if (key.startsWith('SUPERADMIN_USERNAME_')) {
@@ -164,8 +188,10 @@ router.post('/login', (req, res) => {
         const superAdminUsername = process.env[key];
         const superAdminPassword = process.env[`SUPERADMIN_PASSWORD_${suffix}`];
 
+        console.log(`   - Checking ${suffix}: username=${superAdminUsername}, password exists=${!!superAdminPassword}`);
+
         if (username === superAdminUsername && password === superAdminPassword) {
-          console.log(`Secondary superadmin credentials matched for ${suffix}`);
+          console.log(`✅ Secondary superadmin credentials matched for ${suffix}`);
           detectedRole = 'superadmin';
           validCredentials = true;
           break;
@@ -176,11 +202,11 @@ router.post('/login', (req, res) => {
 
   // Check regular admins if not found above
   if (!validCredentials) {
-    console.log('Checking regular admin credentials...');
+    console.log('🔍 Checking regular admin credentials...');
     
     // Check if admin is blocked BEFORE validating credentials
     if (isAdminBlocked(username)) {
-      console.log(`Admin ${username} is blocked`);
+      console.log(`❌ Admin ${username} is blocked`);
       return res.status(403).json({
         success: false,
         message: 'Your account has been blocked by the administrator. Please contact support.',
@@ -190,19 +216,24 @@ router.post('/login', (req, res) => {
 
     // Check legacy admin credentials
     if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-      console.log('Legacy admin credentials matched');
+      console.log('✅ Legacy admin credentials matched');
       detectedRole = 'admin';
       validCredentials = true;
     } else {
       // Check new admin credentials
+      const adminEnvVars = Object.keys(process.env).filter(key => key.startsWith('ADMIN_USERNAME_'));
+      console.log(`   - Available admin usernames: ${adminEnvVars.join(', ')}`);
+      
       for (const key in process.env) {
         if (key.startsWith('ADMIN_USERNAME_')) {
           const suffix = key.replace('ADMIN_USERNAME_', '');
           const adminUsername = process.env[key];
           const adminPassword = process.env[`ADMIN_PASSWORD_${suffix}`];
 
+          console.log(`   - Checking ${suffix}: username=${adminUsername}, password exists=${!!adminPassword}`);
+
           if (username === adminUsername && password === adminPassword) {
-            console.log(`New admin credentials matched for ${suffix}`);
+            console.log(`✅ New admin credentials matched for ${suffix}`);
             detectedRole = 'admin';
             validCredentials = true;
             break;
@@ -213,17 +244,17 @@ router.post('/login', (req, res) => {
   }
 
   if (!validCredentials) {
-    console.log('No valid credentials found');
+    console.log('❌ No valid credentials found');
     return res.status(401).json({ success: false, message: "Invalid credentials" });
   }
 
-  console.log(`Valid credentials found, detected role: ${detectedRole}`);
+  console.log(`✅ Valid credentials found, detected role: ${detectedRole}`);
 
-  // Check MFA setup - FIXED: Only pass username
+  // Check MFA setup
   const hasMFA = checkMFASetup(username);
 
   if (!hasMFA) {
-    console.log(`MFA setup required for ${username}`);
+    console.log(`⚠️  MFA setup required for ${username}`);
     return res.json({
       success: true,
       requireMFASetup: true,
@@ -233,7 +264,7 @@ router.post('/login', (req, res) => {
 
   // Verify MFA token
   if (!totpCode) {
-    console.log(`MFA token required for ${username}`);
+    console.log(`⚠️  MFA token required for ${username}`);
     return res.json({
       success: true,
       requireMFAToken: true,
@@ -242,11 +273,13 @@ router.post('/login', (req, res) => {
   }
 
   if (!verifyMFAToken(username, totpCode)) {
-    console.log(`Invalid MFA token for ${username}`);
+    console.log(`❌ Invalid MFA token for ${username}`);
     return res.status(401).json({ success: false, message: "Invalid MFA token" });
   }
 
   // Generate JWT token with detected role
+  console.log(`🔑 Generating JWT token for ${username} with role ${detectedRole}`);
+  
   const token = jwt.sign(
     { username, role: detectedRole },
     process.env.JWT_SECRET,
@@ -260,8 +293,8 @@ router.post('/login', (req, res) => {
     maxAge: 8 * 60 * 60 * 1000
   });
 
-  console.log(`Login successful for ${username} with role ${detectedRole}`);
-  res.json({ success: true, message: "Login successful" });
+  console.log(`🎉 Login successful for ${username} with role ${detectedRole}`);
+  res.json({ success: true, message: "Login successful", role: detectedRole });
 });
 
 router.post('/logout', (req, res) => {
